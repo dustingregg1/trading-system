@@ -100,6 +100,8 @@ class CapitalAllocator:
             bucket: (self.total_equity * pct).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
             for bucket, pct in self.allocations.items()
         }
+        self.initial_total_equity = self.total_equity
+        self.initial_core_allocation = self.bucket_amounts[AllocationBucket.CORE_BOT]
 
         # Track deployed capital
         self.deployed = {
@@ -253,13 +255,7 @@ class CapitalAllocator:
         available = self.get_available(AllocationBucket.RESERVE)
 
         # Check core drawdown
-        core_deployed = self.deployed[AllocationBucket.CORE_BOT]
-        core_total = self.bucket_amounts[AllocationBucket.CORE_BOT]
-
-        if core_total > 0:
-            drawdown_pct = (core_total - core_deployed) / core_total
-        else:
-            drawdown_pct = Decimal("0")
+        drawdown_pct = self._get_core_drawdown_pct()
 
         warnings = []
 
@@ -292,6 +288,15 @@ class CapitalAllocator:
             message=f"Reserve use of ${amount} approved. Reason: {reason}",
             warnings=[f"Deploying reserve due to {drawdown_pct:.1%} core drawdown"]
         )
+
+    def _get_core_drawdown_pct(self) -> Decimal:
+        """Calculate core drawdown based on equity changes."""
+        current_core = self.bucket_amounts[AllocationBucket.CORE_BOT]
+        initial_core = self.initial_core_allocation
+        if initial_core <= 0:
+            return Decimal("0")
+        drawdown_pct = (initial_core - current_core) / initial_core
+        return max(drawdown_pct, Decimal("0"))
 
     def update_equity(self, new_equity: Decimal):
         """

@@ -83,12 +83,12 @@ class TestCapitalAllocator:
         assert check.allowed is False
         assert "below 15%" in check.message
 
-        # Simulate drawdown by deploying then "losing"
-        self.allocator.deploy(AllocationBucket.CORE_BOT, Decimal("2000"), force=True)
-        self.allocator.release(AllocationBucket.CORE_BOT, Decimal("1700"))  # Lost 15%
+        # Simulate drawdown by reducing equity
+        self.allocator.update_equity(Decimal("3000"))
 
-        # Now should work (but depends on implementation details)
-        # This test may need adjustment based on exact drawdown calculation
+        # Now should work
+        check = self.allocator.use_reserve(Decimal("500"), "drawdown recovery")
+        assert check.allowed is True
 
     def test_equity_update(self):
         """Should recalculate buckets on equity update."""
