@@ -1,279 +1,153 @@
-"""
-Rules-Based Asset Ranking
+"""Asset ranking logic for rotation-based trading."""
 
-TODO-GPT: This file needs implementation.
-
-Replaces narrative-driven selection ("gaming is hot") with
-systematic ranking based on:
-
-1. 14D momentum vs BTC (40% weight)
-   - Calculate: asset_14d_return - btc_14d_return
-   - Higher = better
-
-2. Volume expansion (30% weight)
-   - Calculate: 14D_avg_volume / 60D_avg_volume
-   - >1.0 = expanding, <1.0 = contracting
-   - Higher = better
-
-3. Volatility score (30% weight)
-   - Calculate: inverse of ATR%
-   - Less volatile = higher score (for grid trading stability)
-
-Entry Rules (CRITICAL - prevents pump chasing):
-- NO day-1 pump entries
-- Wait for -30% to -50% pullback from pump high
-- OR wait for breakout level retest
-- Minimum 2-3 day confirmation
-
-Exit Rules:
-- Trailing stop: 15%
-- Time stop: 14 days
-- Max loss: 10%
-
-Requirements:
-1. AssetRanker class
-2. Fetch OHLCV data from Kraken (or accept as input)
-3. Calculate composite score
-4. Return ranked list with entry signals
-5. Filter by minimum liquidity ($500k 24h volume)
-"""
-
-from decimal import Decimal
 from dataclasses import dataclass
-from typing import List, Optional, Dict
-from datetime import datetime, timedelta
-from enum import Enum
+from decimal import Decimal
+from typing import Iterable, Mapping, Optional, Sequence
 
 
-class EntrySignal(Enum):
-    """Entry signal status."""
-    NO_SIGNAL = "no_signal"           # Not ready
-    PULLBACK_ENTRY = "pullback_entry" # Pulled back 30-50% from high
-    RETEST_ENTRY = "retest_entry"     # Retesting breakout level
-    WAIT_CONFIRMATION = "wait_confirm" # Too early, need more days
+def _to_decimal(value: Decimal | float | int | str) -> Decimal:
+    return value if isinstance(value, Decimal) else Decimal(str(value))
 
 
-@dataclass
+def _average(values: Iterable[Decimal]) -> Decimal:
+    values_list = list(values)
+    if not values_list:
+        raise ValueError("Values must not be empty.")
+    return sum(values_list, Decimal("0")) / Decimal(len(values_list))
+
+
+@dataclass(frozen=True)
 class AssetScore:
-    """Ranking score for a single asset."""
     symbol: str
-    momentum_vs_btc: Decimal      # 14D return minus BTC 14D return
-    volume_expansion: Decimal      # 14D vol / 60D vol ratio
-    volatility_atr_pct: Decimal   # ATR as % of price
-    composite_score: Decimal       # Weighted final score
-    entry_signal: EntrySignal
-    pullback_pct: Optional[Decimal]  # Current pullback from recent high
-    last_updated: datetime
-
-
-@dataclass
-class RankingResult:
-    """Complete ranking output."""
-    rankings: List[AssetScore]
-    actionable: List[AssetScore]  # Only those with entry signals
-    excluded: Dict[str, str]       # symbol -> reason for exclusion
-    timestamp: datetime
+    momentum_vs_btc: Decimal
+    volume_expansion: Decimal
+    entry_signal: str
+    score: Decimal
 
 
 class AssetRanker:
-    """
-    TODO-GPT: Implement this class.
+    """Ranks assets by momentum, volume expansion, and entry readiness."""
 
-    Ranks assets for rotation strategy.
-
-    Usage:
-        ranker = AssetRanker(
-            min_volume_24h=500000,
-            weights={"momentum": 0.4, "volume": 0.3, "volatility": 0.3}
-        )
-        result = ranker.rank(universe=["SOL/USD", "ETH/USD", "AVAX/USD"])
-    """
+    NO_SIGNAL = "NO_SIGNAL"
+    WAIT_CONFIRMATION = "WAIT_CONFIRMATION"
+    PULLBACK_ENTRY = "PULLBACK_ENTRY"
+    RETEST_ENTRY = "RETEST_ENTRY"
 
     def __init__(
         self,
-        min_volume_24h: Decimal = Decimal("500000"),
-        max_volatility_pct: Decimal = Decimal("0.50"),
-        weights: Optional[Dict[str, Decimal]] = None
-    ):
-        """
-        Initialize ranker.
-
-        Args:
-            min_volume_24h: Minimum 24h volume in USD
-            max_volatility_pct: Maximum ATR% to include (or scale down)
-            weights: Score weights (momentum, volume, volatility)
-        """
-        # TODO-GPT: Store parameters
-        # Default weights if not provided
-        self.weights = weights or {
-            "momentum": Decimal("0.4"),
-            "volume": Decimal("0.3"),
-            "volatility": Decimal("0.3")
-        }
-        raise NotImplementedError("TODO-GPT: Implement __init__")
+        momentum_days: int = 14,
+        volume_short_days: int = 14,
+        volume_long_days: int = 60,
+        retest_tolerance_pct: Decimal | float | int | str = Decimal("2"),
+    ) -> None:
+        self.momentum_days = momentum_days
+        self.volume_short_days = volume_short_days
+        self.volume_long_days = volume_long_days
+        self.retest_tolerance_pct = _to_decimal(retest_tolerance_pct)
 
     def _calculate_momentum_vs_btc(
         self,
-        asset_prices: List[Decimal],
-        btc_prices: List[Decimal]
+        asset_prices: Sequence[Decimal | float | int | str],
+        btc_prices: Sequence[Decimal | float | int | str],
     ) -> Decimal:
-        """
-        Calculate 14-day momentum relative to BTC.
-
-        TODO-GPT: Implement
-        - asset_prices[0] = oldest, asset_prices[-1] = newest
-        - Return: (asset_return_14d - btc_return_14d)
-        """
-        raise NotImplementedError()
+        asset_return = self._calculate_return(asset_prices, self.momentum_days)
+        btc_return = self._calculate_return(btc_prices, self.momentum_days)
+        return asset_return - btc_return
 
     def _calculate_volume_expansion(
         self,
-        volumes_14d: List[Decimal],
-        volumes_60d: List[Decimal]
+        volumes: Sequence[Decimal | float | int | str],
     ) -> Decimal:
-        """
-        Calculate volume expansion ratio.
-
-        TODO-GPT: Implement
-        - Return: avg(volumes_14d) / avg(volumes_60d)
-        """
-        raise NotImplementedError()
-
-    def _calculate_volatility_score(
-        self,
-        atr_pct: Decimal
-    ) -> Decimal:
-        """
-        Calculate volatility score (inverse of ATR%).
-
-        TODO-GPT: Implement
-        - Lower volatility = higher score
-        - Normalize to 0-1 range
-        """
-        raise NotImplementedError()
+        if len(volumes) < self.volume_long_days:
+            raise ValueError("Not enough volume data for long lookback.")
+        decimal_volumes = [_to_decimal(value) for value in volumes]
+        short_window = decimal_volumes[-self.volume_short_days :]
+        long_window = decimal_volumes[-self.volume_long_days :]
+        short_avg = _average(short_window)
+        long_avg = _average(long_window)
+        if long_avg == 0:
+            raise ValueError("Long-term average volume cannot be zero.")
+        return short_avg / long_avg
 
     def _check_entry_signal(
         self,
-        prices: List[Decimal],
-        high_14d: Decimal
-    ) -> tuple[EntrySignal, Optional[Decimal]]:
-        """
-        Check if asset has valid entry signal.
+        current_price: Decimal | float | int | str,
+        recent_high: Decimal | float | int | str,
+        breakout_level: Optional[Decimal | float | int | str] = None,
+    ) -> str:
+        current_price = _to_decimal(current_price)
+        recent_high = _to_decimal(recent_high)
 
-        TODO-GPT: Implement
-        Rules:
-        - If at new high (within 5%): NO_SIGNAL (day-1 pump)
-        - If pulled back 30-50% from high: PULLBACK_ENTRY
-        - If retesting previous breakout: RETEST_ENTRY
-        - If pulled back <30%: WAIT_CONFIRMATION
+        if current_price >= recent_high:
+            return self.NO_SIGNAL
 
-        Returns:
-            (signal, pullback_pct)
-        """
-        raise NotImplementedError()
+        pullback_pct = (recent_high - current_price) / recent_high * Decimal("100")
+
+        if breakout_level is not None:
+            breakout_level = _to_decimal(breakout_level)
+            retest_pct = (
+                (current_price - breakout_level).copy_abs() / breakout_level * Decimal("100")
+            )
+            if retest_pct <= self.retest_tolerance_pct:
+                return self.RETEST_ENTRY
+
+        if pullback_pct < Decimal("30"):
+            return self.WAIT_CONFIRMATION
+        if pullback_pct <= Decimal("50"):
+            return self.PULLBACK_ENTRY
+        return self.WAIT_CONFIRMATION
+
+    def _calculate_return(
+        self,
+        prices: Sequence[Decimal | float | int | str],
+        lookback_days: int,
+    ) -> Decimal:
+        if len(prices) < lookback_days + 1:
+            raise ValueError("Not enough price data for lookback window.")
+        decimal_prices = [_to_decimal(price) for price in prices]
+        start_price = decimal_prices[-(lookback_days + 1)]
+        end_price = decimal_prices[-1]
+        if start_price == 0:
+            raise ValueError("Start price cannot be zero.")
+        return (end_price - start_price) / start_price
 
     def rank(
         self,
-        universe: List[str],
-        price_data: Optional[Dict] = None
-    ) -> RankingResult:
-        """
-        Rank assets in the universe.
+        asset_data: Mapping[str, Mapping[str, Sequence[Decimal | float | int | str]]],
+        btc_prices: Sequence[Decimal | float | int | str],
+    ) -> list[AssetScore]:
+        ranked: list[AssetScore] = []
+        for symbol, data in asset_data.items():
+            prices = data["prices"]
+            volumes = data["volumes"]
+            breakout_level = data.get("breakout_level")
 
-        Args:
-            universe: List of trading pairs (e.g., ["SOL/USD", "ETH/USD"])
-            price_data: Optional pre-fetched data; if None, fetch from exchange
+            recent_prices = [_to_decimal(price) for price in prices]
+            if len(recent_prices) < self.volume_long_days:
+                continue
+            recent_high = max(recent_prices[-self.volume_long_days :])
+            current_price = recent_prices[-1]
+            entry_signal = self._check_entry_signal(
+                current_price=current_price,
+                recent_high=recent_high,
+                breakout_level=breakout_level,
+            )
+            if entry_signal not in {self.PULLBACK_ENTRY, self.RETEST_ENTRY}:
+                continue
 
-        Returns:
-            RankingResult with sorted rankings and actionable entries
-        """
-        # TODO-GPT: Implement full ranking pipeline
-        # 1. Fetch or use provided price data
-        # 2. Filter by minimum volume
-        # 3. Calculate scores for each asset
-        # 4. Check entry signals
-        # 5. Sort by composite score
-        # 6. Return top N with entry signals
-        raise NotImplementedError("TODO-GPT: Implement rank")
+            momentum_vs_btc = self._calculate_momentum_vs_btc(prices, btc_prices)
+            volume_expansion = self._calculate_volume_expansion(volumes)
+            score = momentum_vs_btc + volume_expansion
 
-    def get_top_n(
-        self,
-        universe: List[str],
-        n: int = 3,
-        require_entry_signal: bool = True
-    ) -> List[AssetScore]:
-        """
-        Get top N ranked assets.
+            ranked.append(
+                AssetScore(
+                    symbol=symbol,
+                    momentum_vs_btc=momentum_vs_btc,
+                    volume_expansion=volume_expansion,
+                    entry_signal=entry_signal,
+                    score=score,
+                )
+            )
 
-        Args:
-            universe: Assets to consider
-            n: Number of top assets to return
-            require_entry_signal: If True, only return actionable entries
-
-        Returns:
-            List of top N AssetScore objects
-        """
-        # TODO-GPT: Implement
-        raise NotImplementedError()
-
-
-# Utility functions for data fetching
-# TODO-GPT: Implement these or integrate with existing Kraken API code
-
-def fetch_ohlcv_kraken(
-    pair: str,
-    days: int = 60
-) -> Dict:
-    """
-    Fetch OHLCV data from Kraken.
-
-    TODO-GPT: Implement using Kraken API
-    Returns dict with: open, high, low, close, volume arrays
-    """
-    raise NotImplementedError()
-
-
-def calculate_atr(
-    highs: List[Decimal],
-    lows: List[Decimal],
-    closes: List[Decimal],
-    period: int = 14
-) -> Decimal:
-    """
-    Calculate Average True Range.
-
-    TODO-GPT: Implement ATR calculation
-    """
-    raise NotImplementedError()
-
-
-if __name__ == "__main__":
-    print("Asset Ranker - TODO-GPT Implementation Required")
-    print("=" * 60)
-
-    # Show expected behavior
-    print("\nExpected ranking output:")
-    print("""
-    1. SOL/USD
-       - Momentum vs BTC: +15.2%
-       - Volume expansion: 1.45x
-       - ATR%: 8.2%
-       - Composite: 0.72
-       - Signal: PULLBACK_ENTRY (-35% from high)
-
-    2. AVAX/USD
-       - Momentum vs BTC: +12.1%
-       - Volume expansion: 1.22x
-       - ATR%: 9.5%
-       - Composite: 0.65
-       - Signal: WAIT_CONFIRMATION (-18% from high)
-
-    3. LINK/USD
-       - Momentum vs BTC: +8.5%
-       - Volume expansion: 0.95x
-       - ATR%: 6.8%
-       - Composite: 0.58
-       - Signal: NO_SIGNAL (at high)
-
-    Actionable: [SOL/USD]
-    """)
+        ranked.sort(key=lambda item: item.score, reverse=True)
+        return ranked

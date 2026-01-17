@@ -1,173 +1,82 @@
-"""
-Volatility-Based Position Sizing
+"""Position sizing based on volatility-adjusted risk."""
 
-TODO-GPT: This file needs implementation.
-
-Core formula:
-    position_size = (equity * risk_budget) / stop_distance
-
-Requirements:
-1. VolatilityPositionSizer class
-2. Input: equity, risk_budget_pct, asset_volatility (ATR%)
-3. Output: position size in USD and units
-4. Must enforce max position as % of equity
-5. Use Decimal for all financial calculations
-
-Example calculations:
-    equity = $4100
-    risk_budget = 0.5% = 0.005
-
-    High vol asset (20% stop):
-        position = 4100 * 0.005 / 0.20 = $102.50
-
-    Low vol asset (5% stop):
-        position = 4100 * 0.005 / 0.05 = $410.00
-
-Additional requirements:
-- Minimum position size floor (don't create dust positions)
-- Maximum position as % of equity cap
-- Scale down for very high volatility assets
-- Return both USD amount and unit count given current price
-"""
-
-from decimal import Decimal, ROUND_DOWN
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Optional
 
 
-@dataclass
-class PositionSizeResult:
-    """Result of position size calculation."""
+def _to_decimal(value: Decimal | float | int | str) -> Decimal:
+    return value if isinstance(value, Decimal) else Decimal(str(value))
+
+
+@dataclass(frozen=True)
+class PositionSize:
     size_usd: Decimal
-    size_units: Decimal
-    risk_per_trade_usd: Decimal
-    effective_stop_pct: Decimal
-    capped: bool  # True if position was reduced due to max position limit
-    skip_reason: Optional[str]  # If position should be skipped entirely
+    units: Decimal
+    stop_pct: Decimal
+    skip_reason: Optional[str]
 
 
 class VolatilityPositionSizer:
-    """
-    TODO-GPT: Implement this class.
-
-    Calculate position sizes based on volatility and risk budget.
-
-    Usage:
-        sizer = VolatilityPositionSizer(
-            equity=Decimal("4100"),
-            risk_budget_pct=Decimal("0.005"),
-            max_position_pct=Decimal("0.25")
-        )
-        result = sizer.calculate(
-            asset_volatility_pct=Decimal("0.15"),
-            current_price=Decimal("3500")
-        )
-    """
+    """Calculates position size based on volatility and risk budget."""
 
     def __init__(
         self,
-        equity: Decimal,
-        risk_budget_pct: Decimal = Decimal("0.005"),
-        max_position_pct: Decimal = Decimal("0.25"),
-        min_position_usd: Decimal = Decimal("50")
-    ):
-        """
-        Initialize position sizer.
-
-        Args:
-            equity: Total account equity in USD
-            risk_budget_pct: Max risk per trade as decimal (0.005 = 0.5%)
-            max_position_pct: Max single position as % of equity (0.25 = 25%)
-            min_position_usd: Minimum position size (skip if below)
-        """
-        # TODO-GPT: Store parameters
-        raise NotImplementedError("TODO-GPT: Implement __init__")
+        equity: Decimal | float | int | str = Decimal("2500"),
+        risk_budget_pct: Decimal | float | int | str = Decimal("0.5"),
+        max_position_pct: Decimal | float | int | str = Decimal("20"),
+        min_position_usd: Decimal | float | int | str = Decimal("100"),
+    ) -> None:
+        self.equity = _to_decimal(equity)
+        self.risk_budget_pct = _to_decimal(risk_budget_pct) / Decimal("100")
+        self.max_position_pct = _to_decimal(max_position_pct) / Decimal("100")
+        self.min_position_usd = _to_decimal(min_position_usd)
 
     def calculate(
         self,
-        asset_volatility_pct: Decimal,
-        current_price: Decimal,
-        custom_stop_pct: Optional[Decimal] = None
-    ) -> PositionSizeResult:
+        asset_volatility_pct: Decimal | float | int | str,
+        current_price: Decimal | float | int | str,
+        custom_stop_pct: Optional[Decimal | float | int | str] = None,
+    ) -> PositionSize:
         """
-        Calculate position size for an asset.
+        Core formula: position_size = (equity * risk_budget) / stop_distance
 
-        Args:
-            asset_volatility_pct: Asset's ATR% or typical move size
-            current_price: Current asset price in USD
-            custom_stop_pct: Override stop distance (default: use volatility)
+        Steps:
+        1. stop_distance = custom_stop_pct or (asset_volatility_pct * 1.5)
+        2. raw_size = (equity * risk_budget_pct) / stop_distance
+        3. Apply max_position_pct cap
+        4. Apply min_position_usd floor (skip if below)
+        5. Calculate units: size_usd / current_price
 
-        Returns:
-            PositionSizeResult with size in USD and units
+        Return: PositionSize dataclass with size_usd, units, stop_pct, skip_reason
         """
-        # TODO-GPT: Implement calculation
-        # 1. Determine stop distance (custom or 1.5x volatility)
-        # 2. Calculate raw position size: (equity * risk_budget) / stop_distance
-        # 3. Apply max position cap
-        # 4. Apply min position floor (return skip if below)
-        # 5. Calculate units from USD size and price
-        raise NotImplementedError("TODO-GPT: Implement calculate")
+        asset_volatility_pct = _to_decimal(asset_volatility_pct)
+        current_price = _to_decimal(current_price)
+        if custom_stop_pct is None:
+            stop_pct = asset_volatility_pct * Decimal("1.5")
+        else:
+            stop_pct = _to_decimal(custom_stop_pct)
 
-    def calculate_for_grid(
-        self,
-        grid_range_pct: Decimal,
-        current_price: Decimal,
-        num_grid_levels: int
-    ) -> PositionSizeResult:
-        """
-        Calculate position size specifically for grid trading.
+        if stop_pct <= 0:
+            raise ValueError("Stop percentage must be positive.")
 
-        For grids, the "stop" is effectively the full grid range,
-        but capital is distributed across levels.
+        stop_distance = stop_pct / Decimal("100")
+        raw_size = (self.equity * self.risk_budget_pct) / stop_distance
+        max_size = self.equity * self.max_position_pct
+        size_usd = raw_size if raw_size <= max_size else max_size
 
-        Args:
-            grid_range_pct: Total grid range (e.g., 0.10 for 10% range)
-            current_price: Current asset price
-            num_grid_levels: Number of grid levels
+        if size_usd < self.min_position_usd:
+            return PositionSize(
+                size_usd=Decimal("0"),
+                units=Decimal("0"),
+                stop_pct=stop_pct,
+                skip_reason="below_minimum",
+            )
 
-        Returns:
-            PositionSizeResult for total grid allocation
-        """
-        # TODO-GPT: Implement grid-specific sizing
-        raise NotImplementedError("TODO-GPT: Implement calculate_for_grid")
-
-
-# Convenience function
-def quick_size(
-    equity: float,
-    risk_pct: float,
-    stop_pct: float,
-    price: float
-) -> tuple[float, float]:
-    """
-    Quick position size calculation.
-
-    Returns:
-        (size_usd, size_units)
-    """
-    # TODO-GPT: Implement quick calculation
-    size_usd = (equity * risk_pct) / stop_pct
-    size_units = size_usd / price
-    return (size_usd, size_units)
-
-
-if __name__ == "__main__":
-    # Demo - will fail until implemented
-    print("Position Sizer - TODO-GPT Implementation Required")
-    print("=" * 60)
-
-    # Show expected behavior
-    equity = 4100
-    risk = 0.005
-
-    scenarios = [
-        ("High vol (20% stop)", 0.20, 3500),
-        ("Med vol (10% stop)", 0.10, 150),
-        ("Low vol (5% stop)", 0.05, 100),
-    ]
-
-    print("\nExpected outputs:")
-    for name, stop, price in scenarios:
-        size_usd = (equity * risk) / stop
-        size_units = size_usd / price
-        print(f"  {name}: ${size_usd:.2f} = {size_units:.4f} units @ ${price}")
+        units = size_usd / current_price
+        return PositionSize(
+            size_usd=size_usd,
+            units=units,
+            stop_pct=stop_pct,
+            skip_reason=None,
+        )
