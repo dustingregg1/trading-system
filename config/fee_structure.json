@@ -1,0 +1,49 @@
+{
+  "exchange": "kraken",
+  "spot": {
+    "maker_fee": -0.0002,
+    "taker_fee": 0.0004,
+    "notes": "Maker gets rebate, taker pays"
+  },
+  "fee_gate": {
+    "description": "Minimum grid step must exceed round-trip costs by factor k",
+    "formula": "grid_step >= k * C, where C = 2*fee + spread + slippage",
+    "k_conservative": 4,
+    "k_moderate": 3,
+    "k_aggressive": 2,
+    "recommended_k": 3
+  },
+  "estimated_costs_by_pair": {
+    "BTC/USD": {
+      "typical_spread_pct": 0.0005,
+      "slippage_buffer_pct": 0.0002,
+      "min_grid_step_pct_k3": 0.0033,
+      "notes": "Tight spread, high liquidity"
+    },
+    "ETH/USD": {
+      "typical_spread_pct": 0.0006,
+      "slippage_buffer_pct": 0.0002,
+      "min_grid_step_pct_k3": 0.0036,
+      "notes": "Good liquidity"
+    },
+    "SOL/USD": {
+      "typical_spread_pct": 0.0010,
+      "slippage_buffer_pct": 0.0005,
+      "min_grid_step_pct_k3": 0.0057,
+      "notes": "Moderate liquidity"
+    },
+    "altcoin_default": {
+      "typical_spread_pct": 0.0020,
+      "slippage_buffer_pct": 0.0010,
+      "min_grid_step_pct_k3": 0.0102,
+      "notes": "Use for low-liquidity alts"
+    }
+  },
+  "calculation_example": {
+    "pair": "ETH/USD",
+    "maker_only_round_trip": "spread + slippage = 0.06% + 0.02% = 0.08%",
+    "mixed_round_trip": "0.02% + spread + slippage = 0.10%",
+    "min_step_k3": "0.10% * 3 = 0.30%",
+    "conclusion": "Grid steps below 0.30% will bleed fees over time"
+  }
+}

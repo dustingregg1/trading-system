@@ -1,0 +1,85 @@
+{
+  "position_sizing": {
+    "method": "volatility_adjusted",
+    "risk_budget_per_trade_pct": {
+      "conservative": 0.0025,
+      "moderate": 0.005,
+      "aggressive": 0.0075
+    },
+    "recommended": 0.005,
+    "formula": "position_size = (equity * risk_budget) / stop_distance",
+    "examples": {
+      "high_vol_asset": {
+        "equity": 4100,
+        "risk_budget": 0.005,
+        "stop_pct": 0.20,
+        "position_size": 102.50,
+        "notes": "20% stop = small position"
+      },
+      "low_vol_asset": {
+        "equity": 4100,
+        "risk_budget": 0.005,
+        "stop_pct": 0.05,
+        "position_size": 410.00,
+        "notes": "5% stop = larger position"
+      }
+    }
+  },
+  "regime_gates": {
+    "atr_compression": {
+      "description": "Pause/widen grids when volatility compresses",
+      "lookback_days": 14,
+      "threshold_ratio": 0.5,
+      "action": "If current ATR < 50% of 30D avg ATR, widen grid or pause"
+    },
+    "btc_dominance": {
+      "description": "Monitor for altcoin correlation breakdown",
+      "spike_threshold_pct": 3.0,
+      "lookback_days": 7,
+      "action": "If BTC.D spikes >3% in 7 days, reduce altcoin exposure"
+    },
+    "funding_rates": {
+      "description": "Extreme funding signals leverage flush incoming",
+      "extreme_threshold": 0.1,
+      "action": "If funding >0.1% (annualized >100%), expect volatility spike"
+    }
+  },
+  "rotation_rules": {
+    "universe": "kraken_spot_usd_pairs",
+    "min_24h_volume_usd": 500000,
+    "ranking_criteria": {
+      "momentum_vs_btc_14d": {
+        "weight": 0.4,
+        "description": "14-day return minus BTC 14-day return"
+      },
+      "volume_expansion": {
+        "weight": 0.3,
+        "description": "14D avg volume / 60D avg volume (>1 = expanding)"
+      },
+      "volatility_score": {
+        "weight": 0.3,
+        "description": "Inverse of ATR% - less volatile scores higher"
+      }
+    },
+    "entry_rules": {
+      "no_day1_pumps": true,
+      "min_confirmation_days": 2,
+      "pullback_entry": {
+        "min_retrace_pct": 0.30,
+        "max_retrace_pct": 0.50,
+        "description": "Buy only after 30-50% pullback from pump high"
+      },
+      "breakout_retest": {
+        "enabled": true,
+        "description": "Alternative: wait for breakout level retest"
+      }
+    },
+    "exit_rules": {
+      "trailing_stop_pct": 0.15,
+      "time_stop_days": 14,
+      "max_loss_pct": 0.10
+    },
+    "rebalance_frequency": "weekly",
+    "max_positions": 3
+  }
+}

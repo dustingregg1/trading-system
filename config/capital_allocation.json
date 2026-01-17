@@ -1,0 +1,36 @@
+{
+  "total_equity": 4100,
+  "last_updated": "2025-01-17",
+  "allocations": {
+    "core_bot": {
+      "percent": 0.61,
+      "amount": 2500,
+      "purpose": "Grid trading - DO NOT TOUCH",
+      "max_positions": 3,
+      "min_per_position": 500
+    },
+    "reserve": {
+      "percent": 0.24,
+      "amount": 1000,
+      "purpose": "Drawdown buffer, recentering funds",
+      "trigger_use_at_drawdown_pct": 0.15,
+      "notes": "Only deploy when core draws down >15%"
+    },
+    "experiments": {
+      "percent": 0.15,
+      "amount": 600,
+      "purpose": "Discretionary trades - ring-fenced",
+      "max_single_position_pct": 0.50,
+      "rules": [
+        "No day-1 pump entries",
+        "Pullback entry only (-30% to -50%)",
+        "Hard stop required before entry",
+        "Time stop: exit if no profit in 14 days"
+      ]
+    }
+  },
+  "warnings": {
+    "thin_grid_threshold": 400,
+    "message": "Position below $400 creates thin grids - consolidate or skip"
+  }
+}
