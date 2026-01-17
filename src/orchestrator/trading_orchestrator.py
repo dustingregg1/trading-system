@@ -258,7 +258,7 @@ class TradingOrchestrator:
         self.state.regime = result.state
         return result
 
-    def scan_pairs(self) -> Dict[str, TickerData]:
+    def scan_pairs(self, pairs: Optional[List[str]] = None) -> Dict[str, TickerData]:
         """
         Scan all pairs and get current market data.
 
@@ -267,7 +267,8 @@ class TradingOrchestrator:
         """
         tickers = {}
 
-        for pair in self.pairs:
+        pairs_to_scan = pairs or self.pairs
+        for pair in pairs_to_scan:
             ticker = self.kraken.get_ticker(pair)
             if ticker:
                 tickers[pair] = ticker
@@ -472,9 +473,17 @@ class TradingOrchestrator:
             }
         )
 
-    def scan_for_opportunities(self) -> List[TradingSignal]:
+    def scan_for_opportunities(
+        self,
+        pairs: Optional[List[str]] = None,
+        top_n: Optional[int] = None
+    ) -> List[TradingSignal]:
         """
         Main scanning loop - find all trading opportunities.
+
+        Args:
+            pairs: Optional subset of pairs to scan (defaults to configured list).
+            top_n: Optional cap on the number of entry signals returned.
 
         Returns:
             List of TradingSignal objects
@@ -510,7 +519,7 @@ class TradingOrchestrator:
             return signals
 
         # Step 3: Scan pairs
-        tickers = self.scan_pairs()
+        tickers = self.scan_pairs(pairs)
         log.info(f"Scanned {len(tickers)} pairs")
 
         # Step 4: Fee gate evaluation
@@ -551,6 +560,11 @@ class TradingOrchestrator:
             0 if s.signal_type == SignalType.ENTRY else 1,
             0 if s.confidence == "high" else 1
         ))
+
+        if top_n is not None:
+            entry_signals = [s for s in signals if s.signal_type == SignalType.ENTRY]
+            non_entries = [s for s in signals if s.signal_type != SignalType.ENTRY]
+            signals = entry_signals[:top_n] + non_entries
 
         self.signals = signals
         self.state.capital_summary = self.capital_allocator.get_summary()
