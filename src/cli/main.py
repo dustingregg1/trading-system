@@ -63,10 +63,11 @@ def cmd_scan(args):
 
         for i, signal in enumerate(signals, 1):
             print(f"[{i}] {signal.pair}")
+            print(f"    Type: {signal.signal_type.value}")
             print(f"    Price: ${signal.price:,.2f}")
-            print(f"    Entry: {signal.entry_signal}")
-            print(f"    Score: {signal.score:.4f}")
-            print(f"    Position: ${signal.position_size_usd:,.2f} ({signal.units:.6f} units)")
+            print(f"    Reason: {signal.reason}")
+            print(f"    Confidence: {signal.confidence}")
+            print(f"    Position: ${signal.size_usd:,.2f} ({signal.size_units:.6f} units)")
             print(f"    Stop: {signal.stop_pct:.2f}%")
 
             # Show gate status
